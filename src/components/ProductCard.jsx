@@ -1,6 +1,6 @@
 import React from 'react';
 import { useCart } from '../context/CartContext';
-import { auth } from '../firebase/config'; 
+import { auth } from '../Firebase/Config'; 
 import { Plus, Lock } from 'lucide-react'; 
 import { useNavigate } from 'react-router-dom'; 
 
