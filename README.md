@@ -1,18 +1,21 @@
-# React + Vite
+# Papelera Web - E-commerce
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Este es un proyecto de plataforma web diseñado para la gestión y muestra de productos de distribución y papelera. Desarrollado con el objetivo de ofrecer una interfaz ágil, moderna y adaptable a cualquier dispositivo.
 
-Currently, two official plugins are available:
+## 🚀 Tecnologías utilizadas
+* HTML5 / CSS3 / JavaScript
+* React 
+* [Sumá acá si usaste algún framework de estilos como Tailwind, Bootstrap o si usaste Firebase/EmailJS]
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 🛠️ Características principales
+* **Catálogo de productos:** Organización y visualización clara de artículos de papelera y embalaje.
+* **Diseño responsivo:** Completamente optimizado para una experiencia fluida tanto en celulares como en computadoras.
+* [Sumá otras funciones clave que tenga tu web, como carrito de compras, filtros o formulario de contacto]
 
-## React Compiler
+## 🔧 Instalación local
 
-The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
+Si querés clonar este proyecto y ejecutarlo en tu computadora:
 
-Note: This will impact Vite dev & build performances.
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+1. Clona el repositorio:
+```bash
+   git clone [https://github.com/MarcialLopez13/mi-portafolio.git](https://github.com/MarcialLopez13/mi-portafolio.git)
