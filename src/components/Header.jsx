@@ -16,7 +16,6 @@ const Button = ({ children, onClick, className }) => (
   </button>
 );
 
-// 🛠️ LISTA DE CATEGORÍAS FIJAS CON ICONOS (Alinealas con los nombres de tu Excel)
 const CATEGORIAS_MENU = [
   { nombre: 'Escolar', icono: GraduationCap },
   { nombre: 'Comercial', icono: Briefcase },
@@ -29,12 +28,29 @@ const CATEGORIAS_MENU = [
   { nombre: 'Embalaje', icono: Package },
 ];
 
-const Header = ({ onSearch, onCategoryChange }) => { // Sincronizamos con props de Home
+const Header = ({ onSearch, onCategoryChange, currentCategory, searchTermValue }) => { 
   const { cartCount, setIsCartOpen } = useCart();
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false); 
   const [searchTerm, setSearchTerm] = useState('');
+  
+  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('TODAS');
+  const [dropdownAbierto, setDropdownAbierto] = useState(false);
+
+  // Sincronizar el estado de la categoría local si cambia desde el HomePage
+  useEffect(() => {
+    if (currentCategory) {
+      setCategoriaSeleccionada(currentCategory.toUpperCase());
+    }
+  }, [currentCategory]);
+
+  // Sincronizar el input de texto local si se resetea desde el HomePage
+  useEffect(() => {
+    if (searchTermValue === '') {
+      setSearchTerm('');
+    }
+  }, [searchTermValue]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -85,17 +101,14 @@ const Header = ({ onSearch, onCategoryChange }) => { // Sincronizamos con props 
     }
   };
 
-  const handleScrollToProducts = () => {
-    document.getElementById('products-grid')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-
-  // 🔥 FUNCIÓN PARA CUANDO CLICKEAN UNA CATEGORÍA EN EL MENÚ
-  const handleCategoryClick = (nombreCategoria) => {
+  const handleCategorySelect = (nombreCategoria) => {
+    setCategoriaSeleccionada(nombreCategoria);
+    setDropdownAbierto(false);
+    
     if (onCategoryChange) {
-      // Le manda la categoría seleccionada a la grilla inferior
-      onCategoryChange(nombreCategoria); 
+      onCategoryChange(nombreCategoria === 'TODAS' ? 'Todas' : nombreCategoria); 
     }
-    // Hace el scroll automático instantáneo hacia los productos
+    
     setTimeout(() => {
       document.getElementById('products-grid')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 50);
@@ -143,22 +156,61 @@ const Header = ({ onSearch, onCategoryChange }) => { // Sincronizamos con props 
             </div>
           </Link>
 
-          {/* SECCIÓN DEL MEDIO: BUSCADOR */}
+          {/* 🔍 SECCIÓN DEL MEDIO: BUSCADOR CON CATEGORÍAS INTEGRADAS */}
           <div className="hidden md:flex flex-1 max-w-xl items-center gap-3">
-            <div className="relative flex-1">
-              <input 
-                type="text" 
-                placeholder="¿Qué estás buscando hoy?" 
-                value={searchTerm}
-                onChange={handleSearchChange}
-                className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10 transition-all outline-none text-xs font-bold text-gray-700"
-              />
-              <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-3.5" />
-              {searchTerm && (
-                <button onClick={() => { setSearchTerm(''); if(onSearch) onSearch(''); }} className="absolute right-3 top-3.5 text-gray-400 hover:text-red-500">
-                  <X size={14}/>
+            <div className="relative flex flex-1 items-center bg-gray-50 border border-gray-200 rounded-xl pr-3 focus-within:bg-white focus-within:border-cyan-500 focus-within:ring-4 focus-within:ring-cyan-500/10 transition-all">
+              <div className="relative flex-1 flex items-center">
+                <input 
+                  type="text" 
+                  placeholder="¿Qué estás buscando hoy?" 
+                  value={searchTerm}
+                  onChange={handleSearchChange}
+                  className="w-full pl-10 pr-8 py-2.5 bg-transparent outline-none text-xs font-bold text-gray-700"
+                />
+                <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-3.5" />
+                {searchTerm && (
+                  <button onClick={() => { setSearchTerm(''); if(onSearch) onSearch(''); }} className="absolute right-2 text-gray-400 hover:text-red-500">
+                    <X size={14}/>
+                  </button>
+                )}
+              </div>
+
+              {/* Separador vertical */}
+              <div className="h-5 w-[1px] bg-gray-300 mx-2"></div>
+
+              {/* Dropdown de Categorías */}
+              <div className="relative">
+                <button 
+                  type="button"
+                  onClick={() => setDropdownAbierto(!dropdownAbierto)}
+                  className="flex items-center gap-1 text-[10px] font-black text-cyan-950 uppercase tracking-wider hover:text-cyan-600 transition-colors whitespace-nowrap focus:outline-none"
+                >
+                  <span>{categoriaSeleccionada}</span>
+                  <ChevronDown size={14} className={`text-cyan-500 transition-transform ${dropdownAbierto ? 'rotate-180' : ''}`} />
                 </button>
-              )}
+
+                {dropdownAbierto && (
+                  <div className="absolute right-0 mt-3 w-48 bg-white border border-gray-100 rounded-xl shadow-xl py-2 z-50 max-h-60 overflow-y-auto">
+                    <button 
+                      type="button"
+                      onClick={() => handleCategorySelect('TODAS')}
+                      className={`w-full text-left px-4 py-2 text-xs font-black uppercase tracking-wider transition-colors ${categoriaSeleccionada === 'TODAS' ? 'bg-cyan-50 text-cyan-600' : 'text-gray-700 hover:bg-gray-50'}`}
+                    >
+                      TODAS
+                    </button>
+                    {CATEGORIAS_MENU.map((cat, index) => (
+                      <button
+                        type="button"
+                        key={index}
+                        onClick={() => handleCategorySelect(cat.nombre)}
+                        className={`w-full text-left px-4 py-2 text-xs font-bold transition-colors ${categoriaSeleccionada === cat.nombre.toUpperCase() ? 'bg-cyan-50 text-cyan-600' : 'text-gray-600 hover:bg-gray-50'}`}
+                      >
+                        {cat.nombre}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -206,23 +258,23 @@ const Header = ({ onSearch, onCategoryChange }) => { // Sincronizamos con props 
         </div>
       </div>
 
-      {/* 🔥 3. NUEVA SECCIÓN: BOTONERA DE CATEGORÍAS CON ICONOS (Estilo Papelera Bariloche) */}
+      {/* 🔥 3. BOTONERA DE CATEGORÍAS CON ICONOS */}
       <div className="w-full border-t border-gray-100 bg-gray-50/50 py-3 hidden md:block">
         <div className="max-w-7xl mx-auto px-4 flex items-center justify-center gap-8 lg:gap-12 overflow-x-auto scrollbar-none">
           {CATEGORIAS_MENU.map((cat, index) => {
             const IconoComponente = cat.icono;
+            const estaActiva = categoriaSeleccionada === cat.nombre.toUpperCase();
             return (
               <button
+                type="button"
                 key={index}
-                onClick={() => handleCategoryClick(cat.nombre)}
+                onClick={() => handleCategorySelect(cat.nombre)}
                 className="flex flex-col items-center gap-1.5 group text-center focus:outline-none shrink-0"
               >
-                {/* Circulo del icono */}
-                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-gray-500 border border-gray-200 shadow-sm group-hover:bg-cyan-500 group-hover:text-white group-hover:border-cyan-600 group-hover:-translate-y-0.5 transition-all duration-200">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm transition-all duration-200 group-hover:bg-cyan-500 group-hover:text-white group-hover:border-cyan-600 group-hover:-translate-y-0.5 ${estaActiva ? 'bg-cyan-500 text-white border-cyan-600' : 'bg-white text-gray-500 border-gray-200'}`}>
                   <IconoComponente size={18} strokeWidth={2.2} />
                 </div>
-                {/* Texto abajo del icono */}
-                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 group-hover:text-cyan-600 transition-colors duration-200">
+                <span className={`text-[10px] font-black uppercase tracking-wider transition-colors duration-200 group-hover:text-cyan-600 ${estaActiva ? 'text-cyan-600' : 'text-gray-400'}`}>
                   {cat.nombre}
                 </span>
               </button>
