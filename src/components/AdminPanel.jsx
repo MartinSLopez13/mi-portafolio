@@ -21,7 +21,6 @@ const AdminPanel = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState(null);
   
-  // MODIFICADO: Sumamos 'category' al estado del formulario de edición manual
   const [editForm, setEditForm] = useState({ name: '', precioConIva: '', precioSinIva: '', image: '', category: '' });
 
   const [orders, setOrders] = useState([]);
@@ -110,6 +109,7 @@ const AdminPanel = () => {
     return isNaN(parsed) ? 0 : parsed;
   };
 
+  // 🛠️ FUNCIÓN DE SELECCIÓN DE EXCEL MODIFICADA Y REPARADA
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -138,7 +138,6 @@ const AdminPanel = () => {
         const keyCodigo = keys.find(k => k.trim().toUpperCase().includes("CODIGO") || k.trim().toUpperCase() === "COD");
         const keyImagen = keys.find(k => k.trim().toUpperCase().includes("IMAGEN") || k.trim().toUpperCase().includes("FOTO") || k.trim().toUpperCase().includes("URL"));
         
-        // NUEVO: Mapeo inteligente de la columna categoría del Excel
         const keyCategoria = keys.find(k => {
           const txt = k.trim().toUpperCase();
           return txt.includes("CATEGORIA") || txt.includes("RUBRO") || txt.includes("TIPO");
@@ -154,10 +153,17 @@ const AdminPanel = () => {
           precioSinIvaFinal = parsePrecioExcel(item[keySinIva]);
         }
 
+        // Si la columna es genérica ("PRECIO"), asignamos según el modo seleccionado para no pisar el otro
         if (keyPrecioGeneral && !keyConIva && !keySinIva) {
           const precioComun = parsePrecioExcel(item[keyPrecioGeneral]);
-          precioConIvaFinal = precioComun;
-          precioSinIvaFinal = precioComun;
+          if (updateMode === 'updateOnly') {
+            // Si pusiste "Solo Precios", es tu actualización de Neto (Precio Sin IVA)
+            precioSinIvaFinal = precioComun;
+          } else {
+            // Por defecto en carga masiva completa asume el precio final
+            precioConIvaFinal = precioComun;
+            precioSinIvaFinal = precioComun;
+          }
         }
 
         return {
@@ -166,7 +172,6 @@ const AdminPanel = () => {
           precioConIva: precioConIvaFinal,
           precioSinIva: precioSinIvaFinal,
           image: item[keyImagen] || '/assets/no-photo.jpg',
-          // Si trae categoría la limpia y guarda, si no, por defecto va a 'General'
           category: keyCategoria && item[keyCategoria] ? String(item[keyCategoria]).trim() : 'General',
           destacado: false 
         };
@@ -177,6 +182,7 @@ const AdminPanel = () => {
     reader.readAsArrayBuffer(file);
   };
 
+  // 🛠️ FUNCIÓN DE PROCESAMIENTO MODIFICADA (Evita que el valor 0 borre el precio anterior)
   const procesarExcel = async () => {
     setIsProcessing(true);
     let count = 0;
@@ -197,12 +203,18 @@ const AdminPanel = () => {
           const prodActual = productosActuales[item.codigo];
           const updateData = { 
             name: item.name,
-            // Guardamos la categoría del excel en la actualización
             category: item.category 
           };
           
-          updateData.precioConIva = item.precioConIva > 0 ? item.precioConIva : (prodActual.precioConIva || 0);
-          updateData.precioSinIva = item.precioSinIva > 0 ? item.precioSinIva : (prodActual.precioSinIva || 0);
+          // Corrección clave: Si el modo es 'updateOnly' (Solo Precios Neto), actualizamos precioSinIva y mantenemos intacto el precioConIva de la base de datos
+          if (updateMode === 'updateOnly') {
+            updateData.precioSinIva = item.precioSinIva > 0 ? item.precioSinIva : (prodActual.precioSinIva || 0);
+            updateData.precioConIva = prodActual.precioConIva || 0; // Se preserva intacto
+          } else {
+            // Carga completa normal
+            updateData.precioConIva = item.precioConIva > 0 ? item.precioConIva : (prodActual.precioConIva || 0);
+            updateData.precioSinIva = item.precioSinIva > 0 ? item.precioSinIva : (prodActual.precioSinIva || 0);
+          }
 
           if (item.image && item.image !== '/assets/no-photo.jpg') {
               updateData.image = item.image;
@@ -245,10 +257,10 @@ const AdminPanel = () => {
           <section className="bg-white p-10 rounded-[3rem] border border-gray-100 flex flex-col items-center gap-6 text-center shadow-sm">
             <FileSpreadsheet className="text-cyan-500 w-12 h-12" />
             <h3 className="font-black text-gray-800 uppercase text-sm tracking-widest">Carga Masiva de Productos</h3>
-            <p className="text-xs text-gray-400 max-w-md -mt-4">El Excel puede contener la columna <b className="text-gray-600">CATEGORIA</b> (o RUBRO) para organizar los filtros automáticamente.</p>
+            <p className="text-xs text-gray-400 max-w-md -mt-4">Seleccioná <b className="text-cyan-600">Importar Todo</b> para la lista con IVA final, o cambiá a <b className="text-orange-500">Solo Precios</b> para subir la lista neta sin modificar el precio final.</p>
             <div className="flex gap-3">
               <button onClick={() => setUpdateMode('create')} className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${updateMode === 'create' ? 'bg-cyan-600 text-white shadow-lg' : 'bg-white text-gray-400 border'}`}>Importar Todo</button>
-              <button onClick={() => setUpdateMode('updateOnly')} className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${updateMode === 'updateOnly' ? 'bg-orange-500 text-white shadow-lg' : 'bg-white text-gray-400 border'}`}>Solo Precios</button>
+              <button onClick={() => setUpdateMode('updateOnly')} className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${updateMode === 'updateOnly' ? 'bg-orange-500 text-white shadow-lg' : 'bg-white text-gray-400 border'}`}>Solo Precios (Neto)</button>
             </div>
             <input type="file" accept=".xlsx, .xls" onChange={handleFileSelect} className="text-[10px] bg-gray-50 p-4 rounded-2xl border-2 border-dashed border-gray-200" />
             {excelPreview.length > 0 && (
@@ -273,7 +285,7 @@ const AdminPanel = () => {
                     <tr>
                       <th className="p-6">Foto</th>
                       <th className="p-6">Código</th>
-                      <th className="p-6">Producto / Categoría</th> {/* CAMBIADO EL ENCABEZADO */}
+                      <th className="p-6">Producto / Categoría</th>
                       <th className="p-6">Precio más IVA</th>
                       <th className="p-6">Precio Final</th>
                       <th className="p-6 text-center">Inicio</th>
@@ -296,7 +308,6 @@ const AdminPanel = () => {
                           </td>
                           <td className="p-6 font-mono text-[11px] text-gray-400 font-bold">{item.codigo}</td>
                           
-                          {/* COLUMNA PRODUCTO: Ahora incluye la categoría abajo del nombre o el input para cambiarla */}
                           <td className="p-6">
                             {editingId === item.id ? (
                               <div className="space-y-2">
@@ -358,7 +369,7 @@ const AdminPanel = () => {
                                        precioConIva: Number(editForm.precioConIva), 
                                        precioSinIva: Number(editForm.precioSinIva), 
                                        image: editForm.image,
-                                       category: editForm.category || 'General' // Guardado de la edición manual
+                                       category: editForm.category || 'General'
                                      }); 
                                      setEditingId(null); 
                                      fetchProducts(); 
@@ -377,7 +388,7 @@ const AdminPanel = () => {
                                          precioConIva: item.precioConIva || '', 
                                          precioSinIva: item.precioSinIva || '', 
                                          image: item.image || '',
-                                         category: item.category || 'General' // Carga inicial para el input de edición
+                                         category: item.category || 'General'
                                        }); 
                                      }} 
                                      className="p-3 bg-blue-50 text-blue-500 rounded-xl hover:bg-blue-500 hover:text-white transition-all"
