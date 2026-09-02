@@ -1,30 +1,20 @@
 export const products = [
-  { 
-    id: 1, 
-    name: "Bolsa de Consorcio 60x90", 
-    price: 1500, 
-    category: "Bolsas", 
-    image: "/assets/bolsa.png" 
+  {
+    id: 1,
+    name: 'Mate Imperial de Calabaza con Virola de Alpaca',
+    category: 'Mates',
+    price: 18500,
+    image: 'https://via.placeholder.com/300x300?text=Mate+Imperial',
+    isNew: true,
+    stock: 15,
   },
-  { 
-    id: 2, 
-    name: "Rollo de Cocina Elegante x3", 
-    price: 1200, 
-    category: "Papelería", 
-    image: "/assets/rollo.png" 
+  {
+    id: 2,
+    name: 'Termo Acero Inoxidable 1L SantoMate',
+    category: 'Termos',
+    price: 32000,
+    image: 'https://via.placeholder.com/300x300?text=Termo+1L',
+    isNew: false,
+    stock: 20,
   },
-  { 
-    id: 3, 
-    name: "Caja de Cartón Nro 5", 
-    price: 800, 
-    category: "Cajas", 
-    image: "/assets/caja.png" 
-  },
-  { 
-    id: 4, 
-    name: "Resma Autor A4 75gr", 
-    price: 8500, 
-    category: "Papelería", 
-    image: "/assets/resma.png" 
-  }
 ];

@@ -1,0 +1,11 @@
+export const BRAND_CONFIG = {
+  name: "SantoMate",
+  tagline: "El mayorista de mates más grande del país",
+  minPurchaseAmount: 125000,
+  currency: "$",
+  whatsappNumber: "+54911XXXXXXXX",
+  colors: {
+    primary: "#2e7d32",
+    dark: "#1e4620",
+  }
+};
