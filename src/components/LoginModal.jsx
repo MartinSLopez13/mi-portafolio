@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
-import { auth, db } from '../firebase';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import React, { useState, useEffect } from 'react';
+import { loginUser, registerUser } from '../api/client';
+
+const GOOGLE_CLIENT_ID = "1013336470310-gvqul73hlc33trlej5idko0hv5qqvmc2.apps.googleusercontent.com";
 
 export const LoginModal = ({ isOpen, onClose, onLogin }) => {
   const [isRegistering, setIsRegistering] = useState(false);
-  
+
   // Campos del formulario
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -14,6 +14,87 @@ export const LoginModal = ({ isOpen, onClose, onLogin }) => {
 
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Decodificador del JWT devuelto por Google
+  const parseJwt = (token) => {
+    try {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split('')
+          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      return JSON.parse(jsonPayload);
+    } catch (e) {
+      return null;
+    }
+  };
+
+  // Callback al seleccionar cuenta de Google
+  const handleGoogleCredentialResponse = async (response) => {
+    try {
+      setError('');
+      setLoading(true);
+      const decoded = parseJwt(response.credential);
+
+      if (!decoded) {
+        throw new Error('No se pudieron obtener los datos de la cuenta de Google.');
+      }
+
+      const googleUser = {
+        name: decoded.name,
+        email: decoded.email,
+        photo: decoded.picture,
+        googleId: decoded.sub
+      };
+
+      // Guardado local de persistencia
+      localStorage.setItem('user', JSON.stringify(googleUser));
+
+      if (onLogin) {
+        onLogin(googleUser);
+      }
+
+      handleClose();
+    } catch (err) {
+      console.error('Error con Google Login:', err);
+      setError('Error al iniciar sesión con Google. Intentá nuevamente.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Inicialización del botón de Google
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const interval = setInterval(() => {
+      if (window.google?.accounts?.id) {
+        clearInterval(interval);
+
+        window.google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: handleGoogleCredentialResponse,
+        });
+
+        const container = document.getElementById('googleSignInBtnContainer');
+        if (container) {
+          container.innerHTML = '';
+          window.google.accounts.id.renderButton(container, {
+            theme: 'outline',
+            size: 'large',
+            width: '100%',
+            text: isRegistering ? 'signup_with' : 'signin_with',
+            shape: 'pill'
+          });
+        }
+      }
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [isOpen, isRegistering]);
 
   if (!isOpen) return null;
 
@@ -37,82 +118,22 @@ export const LoginModal = ({ isOpen, onClose, onLogin }) => {
     setLoading(true);
 
     try {
+      let data;
       if (isRegistering) {
-        // --- PROCESO DE REGISTRO ---
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        const user = userCredential.user;
-
-        const cleanName = name.trim();
-        const cleanPhone = phone.trim();
-
-        const userData = {
-          uid: user.uid,
-          name: cleanName,
-          email: user.email,
-          phone: cleanPhone,
-          createdAt: new Date().toISOString()
-        };
-
-        // Guardar teléfono y nombre en la colección "usuarios" (coincide con tu regla de Firestore)
-        try {
-          await setDoc(doc(db, "usuarios", user.uid), userData);
-        } catch (firestoreErr) {
-          console.warn("No se pudo guardar el perfil extra en Firestore:", firestoreErr);
-          // La cuenta en Auth ya se creó exitosamente, no interrumpimos el flujo
-        }
-
-        onLogin({
-          ...userData,
-          isAdmin: false
-        });
-
+        data = await registerUser(name.trim(), email.trim(), password, phone.trim());
       } else {
-        // --- PROCESO DE LOGIN ---
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        const user = userCredential.user;
+        data = await loginUser(email.trim(), password);
+      }
 
-        // Buscar datos guardados en Firestore
-        let extraData = {};
-        try {
-          // Buscamos primero en "usuarios" y fallback a "users" si tenés cuentas viejas
-          let userDoc = await getDoc(doc(db, "usuarios", user.uid));
-          if (!userDoc.exists()) {
-            userDoc = await getDoc(doc(db, "users", user.uid));
-          }
-
-          if (userDoc.exists()) {
-            extraData = userDoc.data();
-          }
-        } catch (docErr) {
-          console.error("Error al obtener perfil de Firestore:", docErr);
-        }
-
-        const adminEmails = ['admin@santomate.com', 'juanpablo@santomate.com'];
-        const isAdmin = adminEmails.includes(user.email.toLowerCase());
-
-        onLogin({
-          uid: user.uid,
-          email: user.email,
-          name: extraData.name || user.displayName || user.email.split('@')[0],
-          phone: extraData.phone || '', 
-          isAdmin: isAdmin,
-        });
+      if (data?.user) {
+        onLogin(data.user);
       }
 
       handleClose();
     } catch (err) {
       setLoading(false);
-      console.error("Error en autenticación:", err.code || err);
-
-      if (err.code === 'auth/email-already-in-use') {
-        setError('Este correo ya está registrado.');
-      } else if (err.code === 'auth/weak-password') {
-        setError('La contraseña debe tener al menos 6 caracteres.');
-      } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
-        setError('Email o contraseña incorrectos.');
-      } else {
-        setError('Ocurrió un error al autenticar. Intentalo de nuevo.');
-      }
+      console.error("Error en autenticación:", err);
+      setError(err.message || 'Ocurrió un error al autenticar. Intentalo de nuevo.');
     }
   };
 
@@ -127,7 +148,7 @@ export const LoginModal = ({ isOpen, onClose, onLogin }) => {
               {isRegistering ? 'Crear Cuenta' : 'Iniciar Sesión'}
             </h3>
             <p className="text-xs text-emerald-300">
-              {isRegistering ? 'Completá tus datos para registrarte' : 'Accedé a tu cuenta de SantoMate'}
+              {isRegistering ? 'Completá tus datos para registrarte' : 'Accedé a tu cuenta de El SantoMate MP'}
             </p>
           </div>
           <button 
@@ -139,81 +160,97 @@ export const LoginModal = ({ isOpen, onClose, onLogin }) => {
         </div>
 
         {/* Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <div className="p-6 space-y-4">
           {error && (
             <div className="bg-red-50 text-red-600 border border-red-200 text-xs p-3 rounded-xl font-medium">
               ⚠️ {error}
             </div>
           )}
 
-          {/* Nombre (Solo en Registro) */}
-          {isRegistering && (
+          {/* Botón oficial de Google */}
+          <div className="w-full flex justify-center min-h-[44px]">
+            <div id="googleSignInBtnContainer" className="w-full flex justify-center"></div>
+          </div>
+
+          {/* Separador */}
+          <div className="flex items-center my-3">
+            <div className="flex-1 border-t border-stone-200"></div>
+            <span className="px-3 text-[10px] font-bold tracking-wider text-stone-400 uppercase">
+              o con email
+            </span>
+            <div className="flex-1 border-t border-stone-200"></div>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Nombre (Solo en Registro) */}
+            {isRegistering && (
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">Nombre Completo</label>
+                <input 
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Ej: Juan Pérez"
+                  className="w-full text-xs p-3 rounded-xl border border-stone-300 focus:outline-none focus:border-emerald-700"
+                />
+              </div>
+            )}
+
+            {/* Email */}
             <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1">Nombre Completo</label>
+              <label className="block text-xs font-bold text-stone-700 mb-1">Email</label>
               <input 
-                type="text"
+                type="email"
                 required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Ej: Juan Pérez"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="tu@email.com"
                 className="w-full text-xs p-3 rounded-xl border border-stone-300 focus:outline-none focus:border-emerald-700"
               />
             </div>
-          )}
 
-          {/* Email */}
-          <div>
-            <label className="block text-xs font-bold text-stone-700 mb-1">Email</label>
-            <input 
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="tu@email.com"
-              className="w-full text-xs p-3 rounded-xl border border-stone-300 focus:outline-none focus:border-emerald-700"
-            />
-          </div>
+            {/* Teléfono (Solo en Registro) */}
+            {isRegistering && (
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">Teléfono / WhatsApp</label>
+                <input 
+                  type="tel"
+                  required
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="Ej: 11 1234 5678"
+                  className="w-full text-xs p-3 rounded-xl border border-stone-300 focus:outline-none focus:border-emerald-700"
+                />
+              </div>
+            )}
 
-          {/* Teléfono (Solo en Registro) */}
-          {isRegistering && (
+            {/* Contraseña */}
             <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1">Teléfono / WhatsApp</label>
+              <label className="block text-xs font-bold text-stone-700 mb-1">Contraseña</label>
               <input 
-                type="tel"
+                type="password"
                 required
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="Ej: 11 1234 5678"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
                 className="w-full text-xs p-3 rounded-xl border border-stone-300 focus:outline-none focus:border-emerald-700"
               />
             </div>
-          )}
 
-          {/* Contraseña */}
-          <div>
-            <label className="block text-xs font-bold text-stone-700 mb-1">Contraseña</label>
-            <input 
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full text-xs p-3 rounded-xl border border-stone-300 focus:outline-none focus:border-emerald-700"
-            />
-          </div>
+            {/* Botón Principal Tradicional */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-amber-500 hover:bg-amber-400 text-emerald-950 font-bold py-3 rounded-xl text-xs transition-all shadow-md disabled:opacity-50"
+            >
+              {loading 
+                ? 'Procesando...' 
+                : isRegistering ? 'Crear mi cuenta' : 'Ingresar'}
+            </button>
+          </form>
 
-          {/* Botón Principal */}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-amber-500 hover:bg-amber-400 text-emerald-950 font-bold py-3 rounded-xl text-xs transition-all shadow-md disabled:opacity-50"
-          >
-            {loading 
-              ? 'Procesando...' 
-              : isRegistering ? 'Crear mi cuenta' : 'Ingresar'}
-          </button>
-
-          {/* Switch para cambiar entre Login y Registro */}
+          {/* Switch Registro / Login */}
           <div className="text-center pt-2 border-t border-stone-100">
             <button
               type="button"
@@ -228,7 +265,7 @@ export const LoginModal = ({ isOpen, onClose, onLogin }) => {
                 : '¿No tenés cuenta? Registrate gratis'}
             </button>
           </div>
-        </form>
+        </div>
 
       </div>
     </div>

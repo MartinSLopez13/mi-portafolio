@@ -86,10 +86,10 @@ app.post('/api/auth/login', async (req, res) => {
 
 // --- RUTAS DE PRODUCTOS ---
 
-// Listar productos
+// Listar productos ordenados según la posición definida
 app.get('/api/productos', async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM productos ORDER BY id DESC');
+    const [rows] = await pool.query('SELECT * FROM productos ORDER BY orden ASC, id DESC');
     const formatted = rows.map(p => ({
       ...p,
       colors: typeof p.colors === 'string' ? JSON.parse(p.colors || '[]') : p.colors || [],
@@ -99,6 +99,33 @@ app.get('/api/productos', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al obtener productos' });
+  }
+});
+
+// Reordenar productos en lote (DEBE IR ANTES DE /:id)
+app.put('/api/productos/reordenar', authenticateToken, async (req, res) => {
+  const { orderedIds } = req.body;
+  if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+    return res.status(400).json({ error: 'No se enviaron IDs válidos' });
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    for (let index = 0; index < orderedIds.length; index++) {
+      const id = orderedIds[index];
+      await connection.query('UPDATE productos SET orden = ? WHERE id = ?', [index, id]);
+    }
+
+    await connection.commit();
+    res.json({ success: true, message: 'Orden actualizado exitosamente' });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error al actualizar el orden de productos:', error);
+    res.status(500).json({ error: 'Error al actualizar el orden de productos' });
+  } finally {
+    connection.release();
   }
 });
 

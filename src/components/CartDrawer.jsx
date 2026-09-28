@@ -13,7 +13,7 @@ export const CartDrawer = ({
   user,          // Info del usuario logueado
   onOpenLogin    
 }) => {
-  const MINIMUM_PURCHASE = 80000;
+  const MINIMUM_PURCHASE = 100000;
   const currentCart = cartItems || cart || [];
 
   const [customerInfo, setCustomerInfo] = useState({
@@ -26,19 +26,16 @@ export const CartDrawer = ({
   const [isSending, setIsSending] = useState(false);
   const [orderSent, setOrderSent] = useState(false);
 
-  // 1. Cargar datos del usuario de forma inteligente al abrir el carrito o detectar cambios de usuario
+  // 1. Cargar datos del usuario al abrir el carrito
   useEffect(() => {
     if (user && isOpen) {
       setCustomerInfo((prev) => {
-        // Detectar si el nombre del user es un fallback del mail (ej: "elsantomatemp")
         const emailPrefix = user.email ? user.email.split('@')[0] : '';
         const isGenericName = !user.name || user.name === emailPrefix || user.name.includes('@');
 
         return {
           ...prev,
-          // Si el input ya tiene texto lo mantiene; si no, solo asigna user.name si es un nombre real
           name: prev.name ? prev.name : (!isGenericName ? user.name : ''),
-          // Asigna el teléfono guardado en la cuenta si el input está vacío
           phone: prev.phone ? prev.phone : (user.phone || ''),
         };
       });
@@ -53,7 +50,8 @@ export const CartDrawer = ({
   );
 
   const isMinimumReached = total >= MINIMUM_PURCHASE;
-  const amountNeeded = MINIMUM_PURCHASE - total;
+  const amountNeeded = Math.max(0, MINIMUM_PURCHASE - total);
+  const progressPercent = Math.min(100, (total / MINIMUM_PURCHASE) * 100);
 
   const formatPrice = (amount) => {
     return new Intl.NumberFormat('es-AR', {
@@ -68,7 +66,7 @@ export const CartDrawer = ({
     setCustomerInfo((prev) => ({ ...prev, [name]: value }));
   };
 
-  // 2. Obtener valores finales limpios para el mensaje y registro
+  // 2. Obtener valores finales limpios
   const getFinalCustomerData = () => {
     const emailPrefix = user?.email ? user.email.split('@')[0] : '';
     const isGenericName = !user?.name || user?.name === emailPrefix || user?.name.includes('@');
@@ -81,15 +79,19 @@ export const CartDrawer = ({
       ? customerInfo.phone.trim() 
       : (user?.phone || 'No especificado');
 
-    return { finalName, finalPhone };
+    // Identificador único o número de cliente en sesión
+    const customerNumber = user?.id || user?._id || user?.cliente_id || 'S/N';
+
+    return { finalName, finalPhone, customerNumber };
   };
 
   const generateOrderMessage = () => {
-    const { finalName, finalPhone } = getFinalCustomerData();
+    const { finalName, finalPhone, customerNumber } = getFinalCustomerData();
 
-    let message = "NUEVO PEDIDO MAYORISTA - SANTOMATE\n\n";
+    let message = "🚨 NUEVO PEDIDO MAYORISTA - SANTOMATE\n\n";
     
     message += "DATOS DEL CLIENTE:\n";
+    message += `• N° de Cliente: #${customerNumber}\n`; // <-- Solo en el correo
     message += `• Nombre / Razón Social: ${finalName}\n`;
     message += `• Email de cuenta: ${user?.email || 'No especificado'}\n`;
     message += `• Teléfono: ${finalPhone}\n`;
@@ -102,7 +104,8 @@ export const CartDrawer = ({
     message += "DETALLE DEL PEDIDO:\n";
     currentCart.forEach((item) => {
       const colorText = item.selectedColor ? ` (Color: ${item.selectedColor})` : '';
-      message += `• ${item.name}${colorText} x${item.quantity} - ${formatPrice((item.price || 0) * item.quantity)}\n`;
+      const customText = item.details ? ` [${item.details}]` : '';
+      message += `• ${item.name}${colorText}${customText} x${item.quantity} - ${formatPrice((item.price || 0) * item.quantity)}\n`;
     });
 
     message += `\nTOTAL ESTIMADO: ${formatPrice(total)}\n\n`;
@@ -129,16 +132,18 @@ export const CartDrawer = ({
 
     setIsSending(true);
 
-    const { finalName, finalPhone } = getFinalCustomerData();
+    const { finalName, finalPhone, customerNumber } = getFinalCustomerData();
 
     const SERVICE_ID = "service_1ydjq0s";
     const TEMPLATE_ID = "template_35fkmr8";
     const PUBLIC_KEY = "q86WOFlgVZm_rZ0YX";
 
+    // Parámetros para EmailJS: viaje del N° de cliente y asunto en rojo
     const templateParams = {
       to_name: "SantoMate Ventas",
       from_name: finalName,
-      subject: "Compra Nueva", 
+      subject: `🚨 Compra Nueva - #${customerNumber} ${finalName}`, 
+      customer_number: customerNumber, // Disponible como {{customer_number}} en el template
       customer_phone: finalPhone,
       message: generateOrderMessage(),
     };
@@ -147,7 +152,7 @@ export const CartDrawer = ({
       // 1. Enviar email por EmailJS
       await emailjs.send(SERVICE_ID, TEMPLATE_ID, templateParams, PUBLIC_KEY);
 
-      // 2. Guardar orden en Firestore con datos limpios
+      // 2. Guardar orden en base de datos de Hostinger intacta
       if (onCreateOrder) {
         await onCreateOrder({
           name: finalName,
@@ -231,60 +236,81 @@ export const CartDrawer = ({
                       <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
                         Productos Seleccionados
                       </h3>
-                      {currentCart.map((item, index) => (
-                        <div 
-                          key={`${item.id}-${item.selectedColor || index}`} 
-                          className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg border border-gray-100"
-                        >
-                          <img 
-                            src={item.images?.[0] || item.image || "https://via.placeholder.com/80"} 
-                            alt={item.name} 
-                            className="w-14 h-14 object-cover rounded-md bg-white border"
-                          />
-                          
-                          <div className="flex-1">
-                            <h4 className="text-sm font-bold text-gray-800 line-clamp-1">{item.name}</h4>
+                      {currentCart.map((item, index) => {
+                        const isCustom = item.isCustom || (typeof item.id === 'string' && item.id.startsWith('custom-'));
+                        const itemImage = item.image || item.images?.[0] || "https://via.placeholder.com/80";
+
+                        return (
+                          <div 
+                            key={`${item.id}-${item.selectedColor || index}`} 
+                            className={`flex items-center gap-4 p-3 rounded-xl border transition-all ${
+                              isCustom 
+                                ? 'bg-amber-50/40 border-amber-200/80 shadow-sm' 
+                                : 'bg-gray-50 border-gray-100'
+                            }`}
+                          >
+                            <img 
+                              src={itemImage} 
+                              alt={item.name} 
+                              className="w-16 h-16 object-cover rounded-lg bg-white border shrink-0"
+                            />
                             
-                            {item.selectedColor && (
-                              <span className="inline-block bg-emerald-100/80 text-emerald-950 text-[10px] font-extrabold px-2 py-0.5 rounded-md mt-0.5 border border-emerald-200/50">
-                                Color: {item.selectedColor}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <h4 className="text-sm font-bold text-gray-800 truncate">{item.name}</h4>
+                                {isCustom && (
+                                  <span className="bg-amber-500 text-emerald-950 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider shadow-xs">
+                                    ✨ Personalizado
+                                  </span>
+                                )}
+                              </div>
+                              
+                              {item.details ? (
+                                <p className="text-[11px] text-amber-900/80 font-semibold mt-0.5">
+                                  {item.details}
+                                </p>
+                              ) : item.selectedColor ? (
+                                <span className="inline-block bg-emerald-100/80 text-emerald-950 text-[10px] font-extrabold px-2 py-0.5 rounded-md mt-0.5 border border-emerald-200/50">
+                                  Color: {item.selectedColor}
+                                </span>
+                              ) : null}
+
+                              <p className="text-xs text-emerald-800 font-bold mt-1">
+                                {formatPrice(item.price)}
+                              </p>
+
+                              <div className="flex items-center gap-2 mt-2">
+                                <button 
+                                  onClick={() => onUpdateQuantity(item.id, item.quantity - 1, item.selectedColor)}
+                                  className="w-6 h-6 rounded bg-gray-200 hover:bg-gray-300 font-bold text-xs flex items-center justify-center text-gray-700"
+                                >
+                                  -
+                                </button>
+                                <span className="text-xs font-bold text-gray-800 px-1">{item.quantity}</span>
+                                <button 
+                                  onClick={() => onUpdateQuantity(item.id, item.quantity + 1, item.selectedColor)}
+                                  className="w-6 h-6 rounded bg-gray-200 hover:bg-gray-300 font-bold text-xs flex items-center justify-center text-gray-700"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="text-right flex flex-col items-end justify-between self-stretch py-1">
+                              <button 
+                                onClick={() => onRemoveItem(item.id, item.selectedColor)}
+                                className="text-gray-400 hover:text-red-500 text-xs font-bold transition-colors"
+                                title="Eliminar ítem"
+                              >
+                                🗑️
+                              </button>
+                              <span className="text-sm font-extrabold text-gray-900 mt-2">
+                                {formatPrice((item.price || 0) * item.quantity)}
                               </span>
-                            )}
-
-                            <p className="text-xs text-emerald-800 font-semibold mt-0.5">
-                              {formatPrice(item.price)}
-                            </p>
-
-                            <div className="flex items-center gap-2 mt-2">
-                              <button 
-                                onClick={() => onUpdateQuantity(item.id, item.quantity - 1, item.selectedColor)}
-                                className="w-6 h-6 rounded bg-gray-200 hover:bg-gray-300 font-bold text-xs flex items-center justify-center text-gray-700"
-                              >
-                                -
-                              </button>
-                              <span className="text-xs font-bold text-gray-800 px-1">{item.quantity}</span>
-                              <button 
-                                onClick={() => onUpdateQuantity(item.id, item.quantity + 1, item.selectedColor)}
-                                className="w-6 h-6 rounded bg-gray-200 hover:bg-gray-300 font-bold text-xs flex items-center justify-center text-gray-700"
-                              >
-                                +
-                              </button>
                             </div>
                           </div>
-
-                          <div className="text-right flex flex-col items-end justify-between h-full">
-                            <button 
-                              onClick={() => onRemoveItem(item.id, item.selectedColor)}
-                              className="text-gray-400 hover:text-red-500 text-xs font-bold"
-                            >
-                              🗑️
-                            </button>
-                            <span className="text-sm font-extrabold text-gray-900 mt-2">
-                              {formatPrice(item.price * item.quantity)}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
 
                     {/* BLOQUE DE AUTENTICACIÓN / FORMULARIO */}
@@ -384,21 +410,42 @@ export const CartDrawer = ({
                 )}
               </div>
 
-              {/* Footer con Resumen y Botón de Envío */}
+              {/* Footer */}
               {currentCart.length > 0 && (
                 <div className="p-6 border-t border-gray-100 bg-gray-50 space-y-4">
-                  {/* Cartel de Mínimo no Alcanzado */}
-                  {!isMinimumReached && (
-                    <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-xs text-center font-medium leading-relaxed">
-                      ⚠️ El monto mínimo de compra mayorista es de <strong>{formatPrice(MINIMUM_PURCHASE)}</strong>. 
-                      <br />
-                      Te faltan <strong>{formatPrice(amountNeeded)}</strong> para finalizar el pedido.
+                  
+                  {/* Meta de Compra Mínima */}
+                  <div className="bg-white border border-stone-200 p-3.5 rounded-xl shadow-2xs">
+                    <div className="flex justify-between items-center text-xs font-semibold mb-1.5">
+                      <span className={isMinimumReached ? "text-emerald-700 font-bold flex items-center gap-1" : "text-amber-800"}>
+                        {isMinimumReached 
+                          ? "✓ ¡Superaste el monto mínimo mayorista!" 
+                          : `Te faltan ${formatPrice(amountNeeded)} para el mínimo`}
+                      </span>
+                      <span className="text-stone-500 font-mono text-[11px]">
+                        {formatPrice(total)} / {formatPrice(MINIMUM_PURCHASE)}
+                      </span>
                     </div>
-                  )}
+
+                    <div className="w-full h-2 bg-stone-100 rounded-full overflow-hidden border border-stone-200/60">
+                      <div 
+                        className={`h-full transition-all duration-300 ${
+                          isMinimumReached ? 'bg-emerald-600' : 'bg-amber-500'
+                        }`}
+                        style={{ width: `${progressPercent}%` }}
+                      />
+                    </div>
+
+                    {!isMinimumReached && (
+                      <p className="text-[11px] text-stone-500 mt-2 font-medium">
+                        El mínimo de compra para despachos mayoristas es de <strong>{formatPrice(MINIMUM_PURCHASE)}</strong>.
+                      </p>
+                    )}
+                  </div>
 
                   <div className="flex justify-between items-center text-lg font-black text-gray-900">
                     <span>Total Estimado:</span>
-                    <span className="text-emerald-900">{formatPrice(total)}</span>
+                    <span className="text-emerald-900 font-mono">{formatPrice(total)}</span>
                   </div>
 
                   {user ? (
@@ -406,15 +453,19 @@ export const CartDrawer = ({
                       type="submit"
                       form="orderForm"
                       disabled={isSending || !isMinimumReached}
-                      className={`w-full font-bold py-3 px-4 rounded-xl shadow transition-all flex items-center justify-center gap-2 text-sm ${
+                      className={`w-full font-bold py-3.5 px-4 rounded-xl shadow transition-all flex items-center justify-center gap-2 text-sm uppercase tracking-wider ${
                         !isMinimumReached 
-                          ? 'bg-stone-300 text-stone-500 cursor-not-allowed shadow-none'
+                          ? 'bg-stone-200 text-stone-400 cursor-not-allowed border border-stone-300 shadow-none'
                           : isSending 
                             ? 'bg-emerald-800 text-white opacity-50 cursor-not-allowed' 
-                            : 'bg-emerald-800 hover:bg-emerald-900 text-white'
+                            : 'bg-emerald-800 hover:bg-emerald-900 text-white active:scale-[0.99] cursor-pointer'
                       }`}
                     >
-                      {isSending ? "Enviando Pedido..." : "✉️ Confirmar y Enviar Pedido"}
+                      {isSending 
+                        ? "Enviando Pedido..." 
+                        : !isMinimumReached
+                          ? `Mínimo Requerido: ${formatPrice(MINIMUM_PURCHASE)}`
+                          : "✉️ Confirmar y Enviar Pedido"}
                     </button>
                   ) : (
                     <button
@@ -423,7 +474,7 @@ export const CartDrawer = ({
                         onClose();
                         if (onOpenLogin) onOpenLogin();
                       }}
-                      className="w-full bg-amber-500 hover:bg-amber-600 text-emerald-950 font-black py-3 px-4 rounded-xl shadow transition-all text-sm flex items-center justify-center gap-2"
+                      className="w-full bg-amber-500 hover:bg-amber-400 text-emerald-950 font-black py-3.5 px-4 rounded-xl shadow transition-all text-sm flex items-center justify-center gap-2 uppercase tracking-wider"
                     >
                       🔒 Iniciar Sesión para Confirmar
                     </button>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { getBanners, createBanner, deleteBanner } from '../api/client';
+import { getBanners, createBanner, deleteBanner, updateProductsOrder } from '../api/client';
 
 export const AdminPanel = ({ 
   products = [], 
@@ -27,6 +27,63 @@ export const AdminPanel = ({
     { id: 'pavas', name: 'Pavas' },
     { id: 'varios', name: 'Varios' },
   ];
+
+  // --- REORDENAMIENTO DE PRODUCTOS ---
+  const [orderedProducts, setOrderedProducts] = useState(products);
+  const [hasOrderChanged, setHasOrderChanged] = useState(false);
+  const [isSavingOrder, setIsSavingOrder] = useState(false);
+
+  useEffect(() => {
+    setOrderedProducts(products);
+    setHasOrderChanged(false);
+  }, [products]);
+
+  const handleMoveUp = (index) => {
+    if (index === 0) return;
+    const updated = [...orderedProducts];
+    const temp = updated[index - 1];
+    updated[index - 1] = updated[index];
+    updated[index] = temp;
+    setOrderedProducts(updated);
+    setHasOrderChanged(true);
+  };
+
+  const handleMoveDown = (index) => {
+    if (index === orderedProducts.length - 1) return;
+    const updated = [...orderedProducts];
+    const temp = updated[index + 1];
+    updated[index + 1] = updated[index];
+    updated[index] = temp;
+    setOrderedProducts(updated);
+    setHasOrderChanged(true);
+  };
+
+  const handleSaveOrder = async () => {
+    try {
+      setIsSavingOrder(true);
+      const orderedIds = orderedProducts.map((p) => p.id);
+      await updateProductsOrder(orderedIds);
+      setHasOrderChanged(false);
+      alert('¡Orden de productos guardado con éxito!');
+      window.location.reload();
+    } catch (error) {
+      console.error('Error al guardar nuevo orden:', error);
+      alert('Hubo un error al guardar el orden. Revisá la conexión con la API.');
+    } finally {
+      setIsSavingOrder(false);
+    }
+  };
+
+  // --- CONFIRMACIÓN DE SEGURIDAD PARA ELIMINAR ---
+  const handleDeleteProductWithConfirmation = (product) => {
+    const confirmed = window.confirm(
+      `⚠️ ¿Estás seguro de que querés ELIMINAR este producto?\n\n"${product.name}"\n\nEsta acción quitará el producto del catálogo de la tienda y no se puede deshacer.`
+    );
+
+    if (confirmed) {
+      onDeleteProduct(product.id);
+    }
+  };
 
   // --- ESTADOS PRODUCTOS ---
   const [editingId, setEditingId] = useState(null);
@@ -143,7 +200,7 @@ export const AdminPanel = ({
       colorsText: existingColorsText,
       imagesText: existingImagesText,
       description: product.description || '',
-      featured: product.featured || false,
+      featured: Boolean(product.featured),
     });
   };
 
@@ -247,7 +304,7 @@ export const AdminPanel = ({
                   : 'bg-emerald-900/80 hover:bg-emerald-800 text-stone-200'
               }`}
             >
-              📦 Productos ({products.length})
+              📦 Productos ({orderedProducts.length})
             </button>
 
             <button
@@ -432,13 +489,26 @@ export const AdminPanel = ({
             </form>
           </div>
 
-          {/* Lista de Productos */}
+          {/* Lista de Productos Reordenable */}
           <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-            <h2 className="text-lg font-bold text-gray-800 mb-4">
-              📦 Catálogo Actual ({products.length})
-            </h2>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <h2 className="text-lg font-bold text-gray-800">
+                📦 Catálogo Actual ({orderedProducts.length})
+              </h2>
 
-            {products.length === 0 ? (
+              {hasOrderChanged && (
+                <button
+                  type="button"
+                  onClick={handleSaveOrder}
+                  disabled={isSavingOrder}
+                  className="bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-xs py-2 px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 animate-pulse cursor-pointer"
+                >
+                  💾 {isSavingOrder ? 'Guardando orden...' : 'Guardar Nuevo Orden'}
+                </button>
+              )}
+            </div>
+
+            {orderedProducts.length === 0 ? (
               <div className="text-center py-12 text-gray-400">
                 <p className="text-3xl mb-2">🍃</p>
                 <p className="text-sm font-medium">No hay productos cargados en el catálogo.</p>
@@ -448,6 +518,7 @@ export const AdminPanel = ({
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-gray-200 text-gray-400 text-[11px] uppercase tracking-wider">
+                      <th className="pb-3 pl-2 text-center w-16">Posición</th>
                       <th className="pb-3 pl-2">Producto</th>
                       <th className="pb-3">Categoría</th>
                       <th className="pb-3">Precio</th>
@@ -456,7 +527,7 @@ export const AdminPanel = ({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 text-xs">
-                    {products.map((product) => {
+                    {orderedProducts.map((product, index) => {
                       const currentStock = product.stock ?? 0;
                       const imageCount = Array.isArray(product.images) 
                         ? product.images.length 
@@ -470,6 +541,30 @@ export const AdminPanel = ({
 
                       return (
                         <tr key={product.id} className="hover:bg-gray-50 transition-colors">
+                          {/* BOTONES DE REORDENAMIENTO */}
+                          <td className="py-3 pl-2 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleMoveUp(index)}
+                                disabled={index === 0}
+                                className="w-6 h-6 rounded bg-stone-100 hover:bg-stone-200 disabled:opacity-25 disabled:cursor-not-allowed text-stone-700 font-bold flex items-center justify-center transition-colors"
+                                title="Subir producto"
+                              >
+                                ▲
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleMoveDown(index)}
+                                disabled={index === orderedProducts.length - 1}
+                                className="w-6 h-6 rounded bg-stone-100 hover:bg-stone-200 disabled:opacity-25 disabled:cursor-not-allowed text-stone-700 font-bold flex items-center justify-center transition-colors"
+                                title="Bajar producto"
+                              >
+                                ▼
+                              </button>
+                            </div>
+                          </td>
+
                           <td className="py-3 pl-2 flex items-center gap-3">
                             <div className="relative">
                               <img
@@ -492,7 +587,8 @@ export const AdminPanel = ({
                                 </p>
                               )}
 
-                              {product.featured && (
+                              {/* CONDICIONAL CORREGIDO: Evita mostrar el número 0 */}
+                              {Boolean(product.featured) && (
                                 <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded inline-block mt-0.5">
                                   ★ Destacado
                                 </span>
@@ -518,8 +614,10 @@ export const AdminPanel = ({
                               ✏️ Editar
                             </button>
                             <button
-                              onClick={() => onDeleteProduct(product.id)}
-                              className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 font-bold rounded transition-colors text-[11px]"
+                              type="button"
+                              onClick={() => handleDeleteProductWithConfirmation(product)}
+                              className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 font-bold rounded transition-colors text-[11px] cursor-pointer"
+                              title={`Eliminar ${product.name}`}
                             >
                               🗑️ Eliminar
                             </button>
@@ -585,6 +683,13 @@ export const AdminPanel = ({
                     'Cancelado': 'bg-red-100 text-red-800 border-red-300'
                   };
 
+                  const customerPhone = order.customer?.phone || order.phone || order.telefono || '';
+                  const cleanPhone = customerPhone.toString().replace(/[^0-9]/g, '');
+
+                  const displayOrderId = String(order.id).length > 6 
+                    ? String(order.id).slice(-6).toUpperCase() 
+                    : order.id;
+
                   return (
                     <div 
                       key={order.id} 
@@ -594,15 +699,37 @@ export const AdminPanel = ({
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="font-extrabold text-sm text-gray-800">
-                              Pedido #{order.id.slice(-6).toUpperCase()}
+                              Pedido #{displayOrderId}
                             </span>
                             <span className="text-xs text-gray-400">
-                              • {formatDate(order.createdAt)}
+                              • {formatDate(order.createdAt || order.created_at || order.fecha)}
                             </span>
                           </div>
-                          <p className="text-xs text-gray-600 mt-0.5">
-                            <strong className="text-gray-800">{order.customer?.name}</strong> ({order.customer?.email})
-                          </p>
+
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-xs">
+                            <strong className="text-gray-800 uppercase">
+                              {order.customer?.name || order.name || order.cliente || 'Cliente'}
+                            </strong>
+                            <span className="text-gray-500">
+                              ({order.customer?.email || order.email || 'Sin email'})
+                            </span>
+
+                            {cleanPhone ? (
+                              <a
+                                href={`https://wa.me/${cleanPhone}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 font-bold text-emerald-800 bg-emerald-100/80 hover:bg-emerald-200 border border-emerald-300 px-2 py-0.5 rounded-md transition-colors shadow-2xs ml-1"
+                                title="Enviar mensaje de WhatsApp"
+                              >
+                                <span>📱 {customerPhone}</span>
+                              </a>
+                            ) : (
+                              <span className="text-[10px] text-gray-400 italic">
+                                (Sin teléfono)
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         <div className="flex items-center gap-3">
@@ -660,7 +787,7 @@ export const AdminPanel = ({
 
                       <div className="flex items-center justify-between pt-2 text-xs">
                         <span className="text-gray-500 font-medium">
-                          📍 Entrega: <strong className="text-gray-700">{order.customer?.address || 'Retiro en local'}</strong>
+                          📍 Entrega: <strong className="text-gray-700">{order.customer?.address || order.address || 'Retiro en local'}</strong>
                         </span>
                         <div className="text-right">
                           <span className="text-gray-400 uppercase text-[10px] block font-bold">Total del pedido</span>

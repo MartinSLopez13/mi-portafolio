@@ -46,6 +46,17 @@ export const deleteProduct = async (id) => {
   return res.json();
 };
 
+// NUEVA: Actualizar el orden de los productos en lote
+export const updateProductsOrder = async (orderedIds) => {
+  const res = await fetch(`${API_URL}/productos/reordenar`, {
+    method: 'PUT',
+    headers: authHeaders(),
+    body: JSON.stringify({ orderedIds })
+  });
+  if (!res.ok) throw new Error('Error al actualizar el orden de productos');
+  return res.json();
+};
+
 // --- PEDIDOS ---
 export const getOrders = async () => {
   const res = await fetch(`${API_URL}/pedidos`, {

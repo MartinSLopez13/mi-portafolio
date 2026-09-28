@@ -13,14 +13,18 @@ export const ProductCard = ({ product, onAddToCart }) => {
 
   return (
     <div className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300 border border-gray-100 flex flex-col overflow-hidden h-full">
-      <div className="relative pt-[100%] w-full bg-gray-50 overflow-hidden group">
-        <img
-          src={image || "https://via.placeholder.com/300x300?text=SantoMate"}
-          alt={name}
-          className="absolute inset-0 w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
-        />
+      {/* Marco 1:1 donde el producto nunca se corta */}
+      <div className="relative pt-[100%] w-full bg-stone-50 overflow-hidden group">
+        <div className="absolute inset-0 p-3 sm:p-4 flex items-center justify-center">
+          <img
+            src={image || "https://via.placeholder.com/300x300?text=SantoMate"}
+            alt={name}
+            className="w-full h-full object-contain object-center group-hover:scale-105 transition-transform duration-300"
+            loading="lazy"
+          />
+        </div>
         {isNew && (
-          <span className="absolute top-2 left-2 bg-emerald-700 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded">
+          <span className="absolute top-2 left-2 bg-emerald-700 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded shadow-xs">
             Nuevo
           </span>
         )}
