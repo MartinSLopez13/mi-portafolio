@@ -86,7 +86,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 // --- RUTAS DE PRODUCTOS ---
 
-// 1. Listar productos ordenados según la posición definida
+// 1. Listar productos ordenados por 'orden ASC'
 app.get('/api/productos', async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM productos ORDER BY orden ASC, id DESC');
@@ -102,8 +102,8 @@ app.get('/api/productos', async (req, res) => {
   }
 });
 
-// 2. Reordenar productos en lote (IMPORTANTE: Debe ir SIEMPRE antes de /:id)
-app.put('/api/productos/reordenar', authenticateToken, async (req, res) => {
+// 2. Reordenar productos en lote con POST (imposible de confundir con PUT /:id)
+app.post('/api/productos/reordenar', authenticateToken, async (req, res) => {
   const { orderedIds } = req.body;
 
   if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
@@ -138,7 +138,7 @@ app.post('/api/productos', authenticateToken, async (req, res) => {
   }
 });
 
-// 4. Actualizar producto individual por ID (va después de /reordenar)
+// 4. Actualizar producto individual por ID
 app.put('/api/productos/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   const { name, category, price, stock, colors, images, description, featured } = req.body;
