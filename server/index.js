@@ -38,7 +38,7 @@ app.post('/api/auth/register', async (req, res) => {
     const uid = 'usr_' + Date.now();
     const isAdmin = email.toLowerCase() === 'elsantomatemp@gmail.com';
 
-    const [result] = await pool.query(
+    await pool.query(
       'INSERT INTO usuarios (uid, name, email, phone, password, is_admin) VALUES (?, ?, ?, ?, ?, ?)',
       [uid, name, email.toLowerCase(), phone || '', hashedPassword, isAdmin]
     );
@@ -86,7 +86,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 // --- RUTAS DE PRODUCTOS ---
 
-// Listar productos ordenados según la posición definida
+// 1. Listar productos ordenados según la posición definida
 app.get('/api/productos', async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM productos ORDER BY orden ASC, id DESC');
@@ -102,37 +102,28 @@ app.get('/api/productos', async (req, res) => {
   }
 });
 
-// Reordenar productos en lote con depuración
+// 2. Reordenar productos en lote (IMPORTANTE: Debe ir SIEMPRE antes de /:id)
 app.put('/api/productos/reordenar', authenticateToken, async (req, res) => {
   const { orderedIds } = req.body;
-  console.log('--- REORDENAR LLAMADO ---');
-  console.log('Body recibido:', req.body);
-  console.log('Tipo de orderedIds:', typeof orderedIds, 'Es array?:', Array.isArray(orderedIds));
 
   if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
-    console.log('Error: orderedIds no es un array válido o está vacío');
     return res.status(400).json({ error: 'No se enviaron IDs válidos' });
   }
 
   try {
     for (let index = 0; index < orderedIds.length; index++) {
-      const rawId = orderedIds[index];
-      const productId = Number(rawId);
-      console.log(`Actualizando fila -> index: ${index}, id original: ${rawId}, id número: ${productId}`);
-      
-      const [result] = await pool.query('UPDATE productos SET orden = ? WHERE id = ?', [index, productId]);
-      console.log(`Resultado id ${productId} -> Filas afectadas:`, result.affectedRows, 'Filas encontradas:', result.matchedRows);
+      const productId = Number(orderedIds[index]);
+      await pool.query('UPDATE productos SET orden = ? WHERE id = ?', [index, productId]);
     }
 
-    console.log('--- FIN REORDENAR EXITOSO ---');
     res.json({ success: true, message: 'Orden actualizado exitosamente' });
   } catch (error) {
-    console.error('Error SQL al reordenar:', error);
+    console.error('Error al actualizar el orden de productos:', error);
     res.status(500).json({ error: 'Error al actualizar el orden de productos' });
   }
 });
 
-// Agregar producto
+// 3. Agregar producto
 app.post('/api/productos', authenticateToken, async (req, res) => {
   const { name, category, price, stock, colors, images, description, featured } = req.body;
   try {
@@ -147,7 +138,7 @@ app.post('/api/productos', authenticateToken, async (req, res) => {
   }
 });
 
-// Actualizar producto
+// 4. Actualizar producto individual por ID (va después de /reordenar)
 app.put('/api/productos/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   const { name, category, price, stock, colors, images, description, featured } = req.body;
@@ -163,7 +154,7 @@ app.put('/api/productos/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Eliminar producto
+// 5. Eliminar producto
 app.delete('/api/productos/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   try {
