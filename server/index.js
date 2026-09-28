@@ -102,30 +102,23 @@ app.get('/api/productos', async (req, res) => {
   }
 });
 
-// Reordenar productos en lote (DEBE IR ANTES DE /:id)
+// Reordenar productos en lote (Directo con Number(id))
 app.put('/api/productos/reordenar', authenticateToken, async (req, res) => {
   const { orderedIds } = req.body;
   if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
     return res.status(400).json({ error: 'No se enviaron IDs válidos' });
   }
 
-  const connection = await pool.getConnection();
   try {
-    await connection.beginTransaction();
-
     for (let index = 0; index < orderedIds.length; index++) {
-      const id = orderedIds[index];
-      await connection.query('UPDATE productos SET orden = ? WHERE id = ?', [index, id]);
+      const productId = Number(orderedIds[index]);
+      await pool.query('UPDATE productos SET orden = ? WHERE id = ?', [index, productId]);
     }
 
-    await connection.commit();
     res.json({ success: true, message: 'Orden actualizado exitosamente' });
   } catch (error) {
-    await connection.rollback();
     console.error('Error al actualizar el orden de productos:', error);
     res.status(500).json({ error: 'Error al actualizar el orden de productos' });
-  } finally {
-    connection.release();
   }
 });
 
