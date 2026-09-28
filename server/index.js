@@ -102,22 +102,32 @@ app.get('/api/productos', async (req, res) => {
   }
 });
 
-// Reordenar productos en lote (Directo con Number(id))
+// Reordenar productos en lote con depuración
 app.put('/api/productos/reordenar', authenticateToken, async (req, res) => {
   const { orderedIds } = req.body;
+  console.log('--- REORDENAR LLAMADO ---');
+  console.log('Body recibido:', req.body);
+  console.log('Tipo de orderedIds:', typeof orderedIds, 'Es array?:', Array.isArray(orderedIds));
+
   if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+    console.log('Error: orderedIds no es un array válido o está vacío');
     return res.status(400).json({ error: 'No se enviaron IDs válidos' });
   }
 
   try {
     for (let index = 0; index < orderedIds.length; index++) {
-      const productId = Number(orderedIds[index]);
-      await pool.query('UPDATE productos SET orden = ? WHERE id = ?', [index, productId]);
+      const rawId = orderedIds[index];
+      const productId = Number(rawId);
+      console.log(`Actualizando fila -> index: ${index}, id original: ${rawId}, id número: ${productId}`);
+      
+      const [result] = await pool.query('UPDATE productos SET orden = ? WHERE id = ?', [index, productId]);
+      console.log(`Resultado id ${productId} -> Filas afectadas:`, result.affectedRows, 'Filas encontradas:', result.matchedRows);
     }
 
+    console.log('--- FIN REORDENAR EXITOSO ---');
     res.json({ success: true, message: 'Orden actualizado exitosamente' });
   } catch (error) {
-    console.error('Error al actualizar el orden de productos:', error);
+    console.error('Error SQL al reordenar:', error);
     res.status(500).json({ error: 'Error al actualizar el orden de productos' });
   }
 });
