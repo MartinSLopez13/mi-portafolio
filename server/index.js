@@ -102,7 +102,7 @@ app.get('/api/productos', async (req, res) => {
   }
 });
 
-// 2. Reordenar productos en lote con POST (imposible de confundir con PUT /:id)
+// 2. Reordenar productos en lote con POST (queda disponible por si se usa en lote)
 app.post('/api/productos/reordenar', authenticateToken, async (req, res) => {
   const { orderedIds } = req.body;
 
@@ -138,11 +138,19 @@ app.post('/api/productos', authenticateToken, async (req, res) => {
   }
 });
 
-// 4. Actualizar producto individual por ID
+// 4. Actualizar producto individual por ID (soporta reordenamiento y edición regular)
 app.put('/api/productos/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
-  const { name, category, price, stock, colors, images, description, featured } = req.body;
+  const { name, category, price, stock, colors, images, description, featured, orden } = req.body;
+
   try {
+    // Si solo viene 'orden' (cuando reordenamos desde el panel con la nueva función)
+    if (orden !== undefined && name === undefined) {
+      await pool.query('UPDATE productos SET orden = ? WHERE id = ?', [Number(orden), id]);
+      return res.json({ message: 'Orden actualizado' });
+    }
+
+    // Si viene la edición regular del producto
     await pool.query(
       'UPDATE productos SET name=?, category=?, price=?, stock=?, colors=?, images=?, description=?, featured=? WHERE id=?',
       [name, category, price, stock, JSON.stringify(colors || []), JSON.stringify(images || []), description || '', featured ? 1 : 0, id]
