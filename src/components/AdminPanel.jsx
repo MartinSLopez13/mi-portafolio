@@ -9,6 +9,7 @@ export const AdminPanel = ({
   onDeleteProduct, 
   onUpdateOrderStatus,
   onDeleteOrder,
+  onRefreshProducts,
   onGoToStore 
 }) => {
   // Pestaña activa: 'products' | 'banners' | 'orders'
@@ -59,16 +60,26 @@ export const AdminPanel = ({
   };
 
   const handleSaveOrder = async () => {
+    console.log('>>> 1. BOTÓN TOCADO: INICIANDO GUARDADO <<<');
     try {
       setIsSavingOrder(true);
-      const orderedIds = orderedProducts.map((p) => p.id);
-      await updateProductsOrder(orderedIds);
+      
+      const orderedIds = orderedProducts.map((p) => Number(p.id));
+      console.log('>>> 2. IDs A ENVIAR:', orderedIds);
+
+      const respuesta = await updateProductsOrder(orderedIds);
+      console.log('>>> 3. RESPUESTA DE LA API:', respuesta);
+      
       setHasOrderChanged(false);
       alert('¡Orden de productos guardado con éxito!');
-      window.location.reload();
+      
+      if (onRefreshProducts) {
+        console.log('>>> 4. REFLEJANDO PRODUCTOS EN PANTALLA <<<');
+        await onRefreshProducts();
+      }
     } catch (error) {
-      console.error('Error al guardar nuevo orden:', error);
-      alert('Hubo un error al guardar el orden. Revisá la conexión con la API.');
+      console.error('>>> ERROR ATRAPADO EN ADMIN PANEL:', error);
+      alert('Hubo un error al guardar el orden: ' + error.message);
     } finally {
       setIsSavingOrder(false);
     }
@@ -336,7 +347,7 @@ export const AdminPanel = ({
 
             <button
               onClick={onGoToStore}
-              className="bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold py-2 px-3.5 rounded-lg transition-colors flex items-center gap-1.5 ml-2"
+              className="bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold py-2 px-3.5 rounded-lg transition-colors flex items-center gap-1.5 ml-2 cursor-pointer"
             >
               🏪 Tienda
             </button>
@@ -482,7 +493,7 @@ export const AdminPanel = ({
 
               <button
                 type="submit"
-                className="w-full bg-emerald-800 hover:bg-emerald-900 text-white font-bold py-2.5 px-4 rounded-xl shadow transition-colors text-xs mt-2"
+                className="w-full bg-emerald-800 hover:bg-emerald-900 text-white font-bold py-2.5 px-4 rounded-xl shadow transition-colors text-xs mt-2 cursor-pointer"
               >
                 {editingId ? 'Guardar Cambios' : 'Guardar Producto'}
               </button>
@@ -548,7 +559,7 @@ export const AdminPanel = ({
                                 type="button"
                                 onClick={() => handleMoveUp(index)}
                                 disabled={index === 0}
-                                className="w-6 h-6 rounded bg-stone-100 hover:bg-stone-200 disabled:opacity-25 disabled:cursor-not-allowed text-stone-700 font-bold flex items-center justify-center transition-colors"
+                                className="w-6 h-6 rounded bg-stone-100 hover:bg-stone-200 disabled:opacity-25 disabled:cursor-not-allowed text-stone-700 font-bold flex items-center justify-center transition-colors cursor-pointer"
                                 title="Subir producto"
                               >
                                 ▲
@@ -557,7 +568,7 @@ export const AdminPanel = ({
                                 type="button"
                                 onClick={() => handleMoveDown(index)}
                                 disabled={index === orderedProducts.length - 1}
-                                className="w-6 h-6 rounded bg-stone-100 hover:bg-stone-200 disabled:opacity-25 disabled:cursor-not-allowed text-stone-700 font-bold flex items-center justify-center transition-colors"
+                                className="w-6 h-6 rounded bg-stone-100 hover:bg-stone-200 disabled:opacity-25 disabled:cursor-not-allowed text-stone-700 font-bold flex items-center justify-center transition-colors cursor-pointer"
                                 title="Bajar producto"
                               >
                                 ▼
@@ -587,7 +598,6 @@ export const AdminPanel = ({
                                 </p>
                               )}
 
-                              {/* CONDICIONAL CORREGIDO: Evita mostrar el número 0 */}
                               {Boolean(product.featured) && (
                                 <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded inline-block mt-0.5">
                                   ★ Destacado
@@ -609,7 +619,7 @@ export const AdminPanel = ({
                           <td className="py-3 text-right pr-2 space-x-2">
                             <button
                               onClick={() => handleEditClick(product)}
-                              className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded transition-colors text-[11px]"
+                              className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded transition-colors text-[11px] cursor-pointer"
                             >
                               ✏️ Editar
                             </button>
@@ -749,7 +759,7 @@ export const AdminPanel = ({
 
                           <button
                             onClick={() => onDeleteOrder(order.id)}
-                            className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+                            className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
                             title="Eliminar pedido"
                           >
                             🗑️
@@ -875,7 +885,7 @@ export const AdminPanel = ({
 
               <button
                 type="submit"
-                className="w-full bg-emerald-800 hover:bg-emerald-900 text-white font-bold py-2.5 px-4 rounded-xl shadow transition-colors text-xs mt-2"
+                className="w-full bg-emerald-800 hover:bg-emerald-900 text-white font-bold py-2.5 px-4 rounded-xl shadow transition-colors text-xs mt-2 cursor-pointer"
               >
                 Publicar Banner
               </button>
@@ -912,7 +922,7 @@ export const AdminPanel = ({
                     </div>
                     <button
                       onClick={() => handleDeleteBanner(banner.id)}
-                      className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 font-bold rounded-lg transition-colors text-xs"
+                      className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 font-bold rounded-lg transition-colors text-xs cursor-pointer"
                       title="Eliminar Banner"
                     >
                       🗑️

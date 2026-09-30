@@ -333,6 +333,7 @@ export default function App() {
             onDeleteProduct={handleDeleteProduct}
             onUpdateOrderStatus={handleUpdateOrderStatus}
             onDeleteOrder={handleDeleteOrder}
+            onRefreshProducts={fetchProducts}
             onGoToStore={() => {
               fetchProducts(); // Refresca productos al volver a la tienda
               setCurrentView('shop');

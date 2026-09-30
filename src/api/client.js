@@ -46,15 +46,24 @@ export const deleteProduct = async (id) => {
   return res.json();
 };
 
-// NUEVA: Actualizar el orden de los productos en lote
+// Actualizar el orden usando la ruta PUT /:id existente
 export const updateProductsOrder = async (orderedIds) => {
-  const res = await fetch(`${API_URL}/productos/reordenar`, {
-    method: 'PUT',
-    headers: authHeaders(),
-    body: JSON.stringify({ orderedIds })
-  });
-  if (!res.ok) throw new Error('Error al actualizar el orden de productos');
-  return res.json();
+  const updates = orderedIds.map((id, index) =>
+    fetch(`${API_URL}/productos/${id}`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify({ orden: index })
+    })
+  );
+
+  const responses = await Promise.all(updates);
+  const failed = responses.some(res => !res.ok);
+
+  if (failed) {
+    throw new Error('Hubo un error al actualizar el orden de los productos');
+  }
+
+  return { success: true, message: 'Orden actualizado exitosamente' };
 };
 
 // --- PEDIDOS ---
